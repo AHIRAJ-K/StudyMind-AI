@@ -1,67 +1,77 @@
-version: '3.8'
+version: "3.8"
 
 services:
   db:
     image: postgres:15-alpine
-    container_name: studymind_db
-    restart: always
+    restart: unless-stopped
+
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgrespassword
       POSTGRES_DB: studymind
-    ports:
-      - "5432:5432"
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d studymind"]
+      test: ["CMD-SHELL","pg_isready -U postgres -d studymind"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   backend:
-    build: ./backend
-    container_name: studymind_backend
-    restart: always
-    environment:
-        - DATABASE_URL=postgresql://postgres:postgrespassword@db:5432/studymind
-        - JWT_SECRET=${JWT_SECRET}
-        - JWT_ALGORITHM=HS256
-        - ACCESS_TOKEN_EXPIRE_MINUTES=1440
-        - GEMINI_API_KEY=${GEMINI_API_KEY}
-        - MAX_UPLOAD_SIZE=10485760
-        - UPLOAD_DIR=uploads
+    build:
+      context: ./backend
+
+    restart: unless-stopped
+
     depends_on:
       db:
         condition: service_healthy
+
+    environment:
+      DATABASE_URL: postgresql://postgres:postgrespassword@db:5432/studymind
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 1440
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      MAX_UPLOAD_SIZE: 10485760
+      UPLOAD_DIR: uploads
+
     volumes:
       - backend_uploads:/app/uploads
-    ports:
-      - "8000:8000"
+
+    expose:
+      - "8000"
 
   frontend:
-    build: ./frontend
-    container_name: studymind_frontend
-    restart: always
-    environment:
-        - PORT=3000
-        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
-    ports:
-      - "3000:3000"
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+
+    restart: unless-stopped
+
     depends_on:
       - backend
+
+    expose:
+      - "3000"
 
   nginx:
     image: nginx:alpine
-    container_name: studymind_nginx
-    restart: always
+
+    restart: unless-stopped
+
     ports:
       - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+
     depends_on:
       - frontend
       - backend
+
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
 
 volumes:
   postgres_data:
